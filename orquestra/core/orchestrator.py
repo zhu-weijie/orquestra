@@ -1,5 +1,6 @@
-from typing import Any, Dict
+from typing import Any, Dict, Type
 
+from orquestra.agents.anthropic import AnthropicAgentExecutor
 from orquestra.agents.base import BaseAgentExecutor
 from orquestra.agents.openai import OpenAIAgentExecutor
 from orquestra.models import Agent, Workflow
@@ -15,24 +16,37 @@ class Orchestrator:
 
     def __init__(self, workflow: Workflow):
         self.workflow = workflow
-        # Simple context to store task outputs
         self.context: Dict[str, Any] = {"tasks": {}}
-        # Executor registry: maps provider name to executor class
-        self.executors: Dict[str, BaseAgentExecutor] = {
-            "openai": OpenAIAgentExecutor(),
-            # Add other providers here in the future
+
+        # Registry of executor *classes*, not instances
+        self.executor_classes: Dict[str, Type[BaseAgentExecutor]] = {
+            "openai": OpenAIAgentExecutor,
+            "anthropic": AnthropicAgentExecutor,
         }
-        # Map agent names to agent models for easy lookup
+        # Cache for instantiated executors (for lazy loading)
+        self.executor_instances: Dict[str, BaseAgentExecutor] = {}
+
         self.agent_map: Dict[str, Agent] = {
             agent.name: agent for agent in self.workflow.agents
         }
 
     def _get_executor(self, agent: Agent) -> BaseAgentExecutor:
-        """Finds the appropriate executor for a given agent."""
-        executor = self.executors.get(agent.provider)
-        if not executor:
-            raise ValueError(f"No executor found for provider: {agent.provider}")
-        return executor
+        """Finds or creates the appropriate executor for a given agent."""
+        provider = agent.provider
+
+        # Check if we already have an instance in our cache
+        if provider in self.executor_instances:
+            return self.executor_instances[provider]
+
+        # If not, find the class and create a new instance
+        executor_class = self.executor_classes.get(provider)
+        if not executor_class:
+            raise ValueError(f"No executor found for provider: {provider}")
+
+        # Instantiate, cache it, and then return it
+        instance = executor_class()
+        self.executor_instances[provider] = instance
+        return instance
 
     def run(self) -> Dict[str, Any]:
         execution_plan = resolve_task_order(self.workflow.tasks)
