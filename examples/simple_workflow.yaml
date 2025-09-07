@@ -1,0 +1,18 @@
+name: "Simple Blog Post Workflow"
+description: "A workflow to draft and then edit a blog post."
+agents:
+  - name: writer_agent
+    provider: "openai"
+    model: "gpt-5"
+  - name: editor_agent
+    provider: "anthropic"
+    model: "claude-opus-4-1-20250805"
+tasks:
+  - name: "draft_post"
+    agent: "writer_agent"
+    instruction: "Write a 300-word blog post about the future of AI."
+  - name: "edit_post"
+    agent: "editor_agent"
+    instruction: "Review the draft for clarity and tone."
+    depends_on:
+      - "draft_post"
